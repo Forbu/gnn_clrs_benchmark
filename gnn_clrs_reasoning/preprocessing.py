@@ -11,6 +11,7 @@ from torch import nn
 
 # torch geometric
 import torch_geometric
+from torch_geometric.data import Data
 
 GRAPH_NAMES = [
     "dfs",
@@ -43,7 +44,7 @@ def generate_dataset_graph(
 
     # now we have a lot of work to do to get the data into the right format
     # according to what type of algorithm we are using
-
+    return train_ds, num_samples, spec
 
 def preprocess_dfs(batch_train_ds):
     """
@@ -53,7 +54,7 @@ def preprocess_dfs(batch_train_ds):
 
     # first we have to retrieve the graph and the target
     # the graphs are located in the train_ds.inputs.
-    graph_sparse = batch_train_ds.inputs[0].data[0]
+    graph_sparse = torch.Tensor(batch_train_ds.features.inputs[0].data)
 
     # A is a tensor of shape (batch_size, num_nodes, num_nodes)
     # for every graph in the batch we have a matrix of shape (num_nodes, num_nodes)
@@ -67,42 +68,34 @@ def preprocess_dfs(batch_train_ds):
 
     # now for each graph in the batch we have the number of edges
     # we can use this information to create the list of edges
-    list_edges = []
+    list_graph = []
 
     for i in range(graph_sparse.shape[0]):
         # we create a mask to select the edges
         mask = graph_sparse[i] == 1
+
         # we use the mask to select the edges
         edges = torch.where(mask)
-        # we add the edges to the list of edges
-        list_edges.append(edges)
+        
+        edges = torch.stack(edges, dim=0)
+
+        # we retrive the information about the nodes (node features)
+        # the node feature is simply zeros except for the source node (which is the node index at 0)
+        nodes_features = torch.zeros((graph_sparse.shape[1], 1))
+        nodes_features[0] = 1
+
+        target = torch.tensor(batch_train_ds.outputs[0].data[0])
+
+        graph = torch_geometric.data.Data(
+            x=nodes_features,
+            edge_index=edges,
+            y=target,
+        )
+
+        list_graph.append(graph)
 
 
-def get_graph_from_sparse_matrix(graph_sparse):
-    """
-    Get the graph from the sparse matrix.
-    """
-    # we first need to get the number of edges in the graph
-    # we can do this by summing the number of 1 in the adjacency matrix
-    nb_edges = torch.sum(graph_sparse, dim=(1, 2))
-
-    # now for each graph in the batch we have the number of edges
-    # we can use this information to create the list of edges
-    list_edges = []
-
-    for i in range(graph_sparse.shape[0]):
-        # we create a mask to select the edges
-        mask = graph_sparse[i] == 1
-        # we use the mask to select the edges
-        edges = torch.where(mask)
-        # we add the edges to the list of edges
-        list_edges.append(edges)
-
-    # we can now create the graph
-    graph = torch_geometric.data.Data(
-        x=graph_sparse,
-        edge_index=torch.stack(list_edges, dim=0),
-        y=batch_train_ds.targets[0].data[0],
-    )
-
-    return graph
+    # now we can construct a graph batch
+    batch_graphs = torch_geometric.data.Batch.from_data_list(list_graph)
+    
+    return batch_graphs, nb_edges
