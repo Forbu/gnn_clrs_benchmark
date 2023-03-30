@@ -6,104 +6,68 @@ In some models one have to forecast edges values
 
 # main torch imports
 import torch
+from torch import nn
+
+from torch_geometric.nn import GATv2Conv
 
 import pytorch_lightning as pl
 
+from gnn_clrs_reasoning.utils import MLP
 
 
-class RayTracingModelGAT(pl.LightningModule):
+class ProgressiveGNN(pl.LightningModule):
     """
     Model used to solve the ray tracing problem.
+    Progressive GNN is a GNN that is trained in a progressive way.
+    The idea is to used the training paradigm in https://arxiv.org/abs/2202.05826
+    to compute
     """
 
-    def __init__(self, hparams):
-        """
-        Initialize the model.
-        """
+    def __init__(
+        self,
+    ) -> None:
         super().__init__()
-        self.hparams = hparams
 
-        # get the blocks
-        self.blocks_encoding_decoding, self.blocks_message_passing = get_blocks_encoding_decoding(
-            hparams
-        )
-        self.blocks_message_passing = get_blocks_message_passing(hparams)
 
-        # get the output layer
-        self.output_layer = torch.nn.Linear(hparams["hidden_dim"], 1)
+class BlockGNN(nn.Module):
+    """
+    Block GNN is a GNN that is trained in a block wise fashion.
+    """
 
-    def forward(self, graph):
-        """
-        Forward pass of the model.
-        """
-        # first we have to encode the graph
-        x = self.blocks_encoding_decoding(graph.x, graph.edge_index)
+    def __init__(self, nb_layers=3, hidden_dim=128, nb_head=4) -> None:
+        super().__init__()
+        self.nb_layers = nb_layers
+        self.hidden_dim = hidden_dim
+        self.nb_head = nb_head
 
-        # now we have to pass the message
-        x = self.blocks_message_passing(x, graph.edge_index)
+        # init the layers
+        self.layers_messages = nn.ModuleList()
 
-        # now we have to decode the graph
-        x = self.blocks_encoding_decoding(x, graph.edge_index, reverse=True)
+        for _ in range(self.nb_layers):
+            self.layers_messages.append(
+                GATv2Conv(
+                    hidden_dim,
+                    hidden_dim // nb_head,
+                    heads=nb_head,
+                    concat=True,
+                    edge_dim=hidden_dim // nb_head,
+                )
+            )
 
-        # now we have to predict the output
-        x = self.output_layer(x)
+        self.layers_nodes = nn.ModuleList()
+        for _ in range(self.nb_layers):
+            self.layers_nodes.append(
+                MLP(
+                    in_dim=hidden_dim,
+                    out_dim=hidden_dim,
+                    hidden_dim=hidden_dim,
+                )
+            )
 
-        return x
-
-    def training_step(self, batch, batch_idx):
-        """
-        Training step of the model.
-        """
-        # get the graph
-        graph = batch
-
-        # get the output
-        output = self(graph)
-
-        # compute the loss
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            output, graph.y
-        )
-
-        # log the loss
-        self.log("train_loss", loss)
-
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        """
-        Validation step of the model.
-        """
-        # get the graph
-        graph = batch
-
-        # get the output
-        output = self(graph)
-
-        # compute the loss
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            output, graph.y
-        )
-
-        # log the loss
-        self.log("val_loss", loss)
-
-        return loss
-
-    def test_step(self, batch, batch_idx):
-        """
-        Test step of the model.
-        """
-        # get the graph
-        graph = batch
-
-        # get the output
-        output = self(graph)
-
-        # compute the loss
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            output, graph.y
-        )
-
-        # log the loss
-        self.log("test_loss", loss)
+        def forward(self, nodes, edge_index, edge_attr):
+            """
+            Forward pass of the GNN
+            """
+            for i in range(self.nb_layers):
+                nodes = self.layers_nodes[i](nodes)
+                nodes = self.layers_messages[i](nodes, edge_index, edge_attr)
