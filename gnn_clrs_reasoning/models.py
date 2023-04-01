@@ -25,8 +25,17 @@ class ProgressiveGNN(pl.LightningModule):
     to compute
     """
 
-    def __init__(self, node_dim=2, edges_dim=2, hidden_dim=128, nb_head=4) -> None:
+    def __init__(
+        self, node_dim=2, edges_dim=2, hidden_dim=128, nb_head=4, m_iter=5, n_iter=5
+    ) -> None:
         super().__init__()
+
+        self.node_dim = node_dim
+        self.edges_dim = edges_dim
+        self.hidden_dim = hidden_dim
+        self.nb_head = nb_head
+        self.m_iter = m_iter
+        self.n_iter = n_iter
 
         # simple node encoder and edge encoder
         self.node_encoder = MLP(
@@ -56,6 +65,88 @@ class ProgressiveGNN(pl.LightningModule):
         self.final_layer = EdgesSoftmax(
             nodes_dim=128, edges_dim=128, nb_layers=2, hidden_dim=128
         )
+
+    def forward(
+        self,
+        nb_iter,
+        nodes,
+        edge_index,
+        edge_attr,
+        progressive=False,
+        progressive_iter=0,
+    ):
+        """
+        Forward pass of the model
+
+        params:
+            nb_iter: number of iteration of the block GNN for the classic block
+            nodes: nodes features
+            edge_index: edges index
+            edge_attr: edges features
+            progressive: if true we use the progressive training paradigm
+            progressive_iter: number of iteration of the block GNN for the progressive training
+
+        return:
+            edges: edges values (softmax over the edges)
+        """
+
+        if not progressive:
+
+            nodes_init = nodes.clone()
+
+            # first we encode the nodes and edges
+            nodes = self.node_encoder(nodes)
+            edge_attr = self.edge_encoder(edge_attr)
+
+            for _ in range(nb_iter):
+                nodes_input = torch.cat([nodes, nodes_init], dim=-1)
+                # now we can forward the block GNN
+                nodes = self.block_gnn(nodes_input, edge_index, edge_attr)
+
+            # now we can forward the final layer
+            edges = self.final_layer(nodes, edge_index, edge_attr)
+
+            return edges
+        else:
+            with torch.no_grad():
+                nodes_init = nodes.clone()
+
+                # first we encode the nodes and edges
+                nodes = self.node_encoder(nodes)
+                edge_attr = self.edge_encoder(edge_attr)
+
+                for _ in range(nb_iter):
+                    nodes_input = torch.cat([nodes, nodes_init], dim=-1)
+                    # now we can forward the block GNN
+                    nodes = self.block_gnn(nodes_input, edge_index, edge_attr)
+
+            nodes = nodes.detach()  # we detach the nodes to avoid gradient computation
+
+            for _ in range(progressive_iter):
+                # now we can forward the final layer
+                nodes_input = torch.cat([nodes, nodes_init], dim=-1)
+                # now we can forward the block GNN
+                nodes = self.block_gnn(nodes_input, edge_index, edge_attr)
+
+            # now we can forward the final layer
+            edges = self.final_layer(nodes, edge_index, edge_attr)
+
+            return edges
+
+    def training_step(self, batch, batch_idx):
+        """
+        Training step
+        TODO
+        """
+        # get the data
+        nodes, edge_index, edge_attr, edge_prediction = batch
+
+        # we mix the progressive and classic training
+        # we select a random number of iteration for the progressive training
+        # and a random number of iteration for the classic training
+        m_iter = torch.randint(1, self.m_iter, (1,)).item()
+
+        return loss
 
 
 class BlockGNN(nn.Module):
