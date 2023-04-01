@@ -1,6 +1,8 @@
 """
 Training module
 """
+from gnn_clrs_reasoning.models import ProgressiveGNN, BlockGNN, EdgesSoftmax
+from gnn_clrs_reasoning.preprocessing import PreprocessGraphDataset
 
 
 def train(args):
@@ -17,3 +19,15 @@ def train(args):
     # train the model
 
     pass
+
+
+def create_dataloader(args):
+    """
+    This function is used to create the dataloader
+    """
+
+    # init the dataset
+
+    # init the dataloader
+
+    return

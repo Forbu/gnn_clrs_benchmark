@@ -165,8 +165,8 @@ class ProgressiveGNN(pl.LightningModule):
         # we mix the progressive and classic training
         # we select a random number of iteration for the progressive training
         # and a random number of iteration for the classic training
-        n = torch.randint(1, self.m_iter, (1,)).item()
-        k = torch.randint(1, self.n_iter - n, (1,)).item()
+        n_step = torch.randint(1, self.m_iter, (1,)).item()
+        k = torch.randint(1, self.m_iter + 1 - n_step, (1,)).item()
 
         # we first compute the standard training
         edges_softmax = self(

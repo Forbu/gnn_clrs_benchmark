@@ -1,8 +1,6 @@
 """
 Module part containing the preprocessing code for the experiments.
 """
-
-
 import clrs
 
 # classic torch
@@ -11,7 +9,9 @@ from torch import nn
 
 # torch geometric
 import torch_geometric
-from torch_geometric.data import Data
+
+# import IterableDataset from torch.utils.data
+from torch.utils.data import IterableDataset
 
 GRAPH_NAMES = [
     "dfs",
@@ -46,6 +46,7 @@ def generate_dataset_graph(
     # according to what type of algorithm we are using
     return train_ds, num_samples, spec
 
+
 def preprocess_dfs(batch_train_ds):
     """
     Preprocess the dfs graph.
@@ -76,13 +77,17 @@ def preprocess_dfs(batch_train_ds):
 
         # we use the mask to select the edges
         edges = torch.where(mask)
-        
+
         edges = torch.stack(edges, dim=0)
 
         # we retrive the information about the nodes (node features)
         # the node feature is simply zeros except for the source node (which is the node index at 0)
-        nodes_features = torch.zeros((graph_sparse.shape[1], 1))
-        nodes_features[0] = 1
+        nodes_features = torch.zeros((graph_sparse.shape[1], 2))
+        nodes_features[0, 0] = 1
+
+        nodes_features[:, 1] = torch.Tensor(
+            batch_train_ds.features.inputs[2].data[i, :]
+        )
 
         target = torch.tensor(batch_train_ds.outputs[0].data[0])
 
@@ -94,8 +99,42 @@ def preprocess_dfs(batch_train_ds):
 
         list_graph.append(graph)
 
-
     # now we can construct a graph batch
-    batch_graphs = torch_geometric.data.Batch.from_data_list(list_graph)
-    
-    return batch_graphs, nb_edges
+    if len(list_graph) == 1:
+        return list_graph[0], nb_edges
+    else:
+        batch_graphs = torch_geometric.data.Batch.from_data_list(list_graph)
+        return batch_graphs, nb_edges
+
+
+class PreprocessGraphDataset(IterableDataset):
+    """
+    Preprocess the graph dataset.
+    """
+
+    def __init__(self, folder, algorithm, split):
+        self.folder = folder
+        self.algorithm = algorithm
+        self.split = split
+
+        # we have to preprocess the dataset
+        self.train_ds, self.num_samples, self.spec = generate_dataset_graph(
+            folder=self.folder,
+            algorithm=self.algorithm,
+            split=self.split,
+            batch_size=1,
+        )
+
+        self.train_ds = self.train_ds.as_numpy_iterator()
+
+    def __iter__(self):
+        """
+        Should return an iterator over the dataset where each element is a graph
+        (after preprocessing)
+        """
+        # we have to preprocess the dataset
+        for element in self.train_ds:
+            # now we can preprocess the graph
+            graphs, _ = preprocess_dfs(element)
+
+            yield graphs
