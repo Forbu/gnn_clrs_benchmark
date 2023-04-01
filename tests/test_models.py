@@ -82,4 +82,3 @@ def test_edges_softmax(model, graph_data):
     edges = edge_softmax(nodes, edge_index, edge_attr)
 
     assert edges.shape == (NB_EDGES, 1)
-    

@@ -146,7 +146,19 @@ class ProgressiveGNN(pl.LightningModule):
         # and a random number of iteration for the classic training
         m_iter = torch.randint(1, self.m_iter, (1,)).item()
 
-        return loss
+        return 
+    
+    def validation_step(self, batch, batch_idx):
+        pass
+
+        
+
+    def configure_optimizers(self):
+        """
+        Classic Adam optimizer
+        """
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
 
 
 class BlockGNN(nn.Module):
