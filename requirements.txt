@@ -1,1 +1,4 @@
 dm-clrs
+torch_geometric
+torch_scatter
+pytorch_lightning

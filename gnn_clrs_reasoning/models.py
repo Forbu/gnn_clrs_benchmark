@@ -14,7 +14,7 @@ from torch_scatter.composite import scatter_softmax
 
 import pytorch_lightning as pl
 
-from gnn_clrs_reasoning.utils import MLP
+from gnn_clrs_reasoning.utils import MLP, compute_edges_loss
 
 
 class ProgressiveGNN(pl.LightningModule):
@@ -26,7 +26,14 @@ class ProgressiveGNN(pl.LightningModule):
     """
 
     def __init__(
-        self, node_dim=2, edges_dim=2, hidden_dim=128, nb_head=4, m_iter=5, n_iter=5
+        self,
+        node_dim=2,
+        edges_dim=2,
+        hidden_dim=128,
+        nb_head=4,
+        m_iter=5,
+        n_iter=5,
+        lambda_coef=0.5,
     ) -> None:
         super().__init__()
 
@@ -36,6 +43,7 @@ class ProgressiveGNN(pl.LightningModule):
         self.nb_head = nb_head
         self.m_iter = m_iter
         self.n_iter = n_iter
+        self.lambda_coef = lambda_coef
 
         # simple node encoder and edge encoder
         self.node_encoder = MLP(
@@ -58,6 +66,7 @@ class ProgressiveGNN(pl.LightningModule):
             nb_layers=2,
             hidden_dim=hidden_dim,
             nb_head=nb_head,
+            edges_dim=hidden_dim,
         )
 
         # final layer, the final layer give a softmax over the edges
@@ -65,6 +74,8 @@ class ProgressiveGNN(pl.LightningModule):
         self.final_layer = EdgesSoftmax(
             nodes_dim=128, edges_dim=128, nb_layers=2, hidden_dim=128
         )
+
+        self.loss_fn = torch.nn.BCELoss()
 
     def forward(
         self,
@@ -101,6 +112,11 @@ class ProgressiveGNN(pl.LightningModule):
             for _ in range(nb_iter):
                 nodes_input = torch.cat([nodes, nodes_init], dim=-1)
                 # now we can forward the block GNN
+
+                print(nodes_input.shape)
+                print(edge_index.shape)
+                print(edge_attr.shape)
+
                 nodes = self.block_gnn(nodes_input, edge_index, edge_attr)
 
             # now we can forward the final layer
@@ -139,19 +155,59 @@ class ProgressiveGNN(pl.LightningModule):
         TODO
         """
         # get the data
-        nodes, edge_index, edge_attr, edge_prediction = batch
+        nodes, edge_index, edge_attr, edge_target = (
+            batch["nodes"],
+            batch["edge_index"],
+            batch["edge_attr"],
+            batch["edge_target"],
+        )
 
         # we mix the progressive and classic training
         # we select a random number of iteration for the progressive training
         # and a random number of iteration for the classic training
-        m_iter = torch.randint(1, self.m_iter, (1,)).item()
+        n = torch.randint(1, self.m_iter, (1,)).item()
+        k = torch.randint(1, self.n_iter - n, (1,)).item()
 
-        return 
-    
+        # we first compute the standard training
+        edges_softmax = self(
+            nb_iter=n,
+            nodes=nodes,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            progressive=False,
+        )
+
+        # compute the loss
+        loss_standard = compute_edges_loss(
+            edges_softmax, edge_index, edge_target, self.loss_fn
+        )
+
+        # now we compute the progressive training
+        edges_softmax_progressive = self(
+            nb_iter=n,
+            nodes=nodes,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            progressive=True,
+            progressive_iter=k,
+        )
+
+        loss_progressive = compute_edges_loss(
+            edges_softmax_progressive, edge_index, edge_target, self.loss_fn
+        )
+
+        self.log("loss_standard_train", loss_standard)
+        self.log("loss_progressive_train", loss_progressive)
+
+        return (
+            self.lambda_coef * loss_standard + (1 - self.lambda_coef) * loss_progressive
+        )
+
     def validation_step(self, batch, batch_idx):
+        """
+        TODO
+        """
         pass
-
-        
 
     def configure_optimizers(self):
         """
