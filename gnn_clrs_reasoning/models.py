@@ -53,6 +53,10 @@ class ProgressiveGNN(pl.LightningModule):
 
         # final layer, the final layer give a softmax over the edges
         # (each nodes give a softmax over the edges)
+        self.final_layer = EdgesSoftmax(nodes_dim=128,
+        edges_dim=128,
+        nb_layers=2,
+        hidden_dim=128)
 
 
 class BlockGNN(nn.Module):
