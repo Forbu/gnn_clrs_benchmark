@@ -53,10 +53,9 @@ class ProgressiveGNN(pl.LightningModule):
 
         # final layer, the final layer give a softmax over the edges
         # (each nodes give a softmax over the edges)
-        self.final_layer = EdgesSoftmax(nodes_dim=128,
-        edges_dim=128,
-        nb_layers=2,
-        hidden_dim=128)
+        self.final_layer = EdgesSoftmax(
+            nodes_dim=128, edges_dim=128, nb_layers=2, hidden_dim=128
+        )
 
 
 class BlockGNN(nn.Module):
@@ -66,7 +65,9 @@ class BlockGNN(nn.Module):
     and the node output size is hidden_dim.
     """
 
-    def __init__(self, nodes_dim=130, nb_layers=2, hidden_dim=128, nb_head=4) -> None:
+    def __init__(
+        self, nodes_dim=130, nb_layers=2, hidden_dim=128, nb_head=4, edges_dim=2
+    ) -> None:
         super().__init__()
         self.nodes_dim = nodes_dim
         self.nb_layers = nb_layers
@@ -79,16 +80,27 @@ class BlockGNN(nn.Module):
         # init the layers
         self.layers_messages = nn.ModuleList()
 
-        for _ in range(self.nb_layers):
-            self.layers_messages.append(
-                GATv2Conv(
-                    nodes_dim,
-                    hidden_dim // nb_head,
-                    heads=nb_head,
-                    concat=True,
-                    edge_dim=hidden_dim // nb_head,
+        for i in range(self.nb_layers):
+            if i == 0:
+                self.layers_messages.append(
+                    GATv2Conv(
+                        nodes_dim,
+                        hidden_dim // nb_head,
+                        heads=nb_head,
+                        concat=True,
+                        edge_dim=edges_dim,
+                    )
                 )
-            )
+            else:
+                self.layers_messages.append(
+                    GATv2Conv(
+                        hidden_dim,
+                        hidden_dim // nb_head,
+                        heads=nb_head,
+                        concat=True,
+                        edge_dim=edges_dim,
+                    )
+                )
 
         self.layers_nodes = nn.ModuleList()
         for _ in range(self.nb_layers):
@@ -100,13 +112,15 @@ class BlockGNN(nn.Module):
                 )
             )
 
-        def forward(self, nodes, edge_index, edge_attr):
-            """
-            Forward pass of the GNN
-            """
-            for i in range(self.nb_layers):
-                nodes = self.layers_messages[i](nodes, edge_index, edge_attr)
-                nodes = self.layers_nodes[i](nodes)
+    def forward(self, nodes, edge_index, edge_attr):
+        """
+        Forward pass of the GNN
+        """
+        for i in range(self.nb_layers):
+            nodes = self.layers_messages[i](nodes, edge_index, edge_attr)
+            nodes = self.layers_nodes[i](nodes)
+
+        return nodes
 
 
 class EdgesSoftmax(nn.Module):
@@ -151,6 +165,6 @@ class EdgesSoftmax(nn.Module):
         # use scatter_softmax to compute the softmax over the edges
         # we have to use the edge_index[0] to compute the softmax
         # because each nodes have N_edges
-        result = scatter_softmax(message, edge_index[0])  # shape (nb_edges, 1)
+        result = scatter_softmax(message[:, 0], edge_index[0, :])  # shape (nb_edges, 1)
 
-        return result
+        return result.reshape(-1, 1)

@@ -9,7 +9,7 @@ from torch import nn
 
 from gnn_clrs_reasoning.models import ProgressiveGNN, BlockGNN, EdgesSoftmax
 
-NODES_DIM = 2
+NODES_DIM = 130
 EDGES_DIM = 3
 NB_NODES = 100
 NB_EDGES = 400
@@ -46,7 +46,7 @@ def create_model():
     """
 
     block_gnn = BlockGNN(
-        node_dim=NODES_DIM, edges_dim=EDGES_DIM, hidden_dim=128, nb_head=4
+        nodes_dim=NODES_DIM, edges_dim=EDGES_DIM, hidden_dim=128, nb_head=4
     )
 
     edge_softmax = EdgesSoftmax(
@@ -82,3 +82,4 @@ def test_edges_softmax(model, graph_data):
     edges = edge_softmax(nodes, edge_index, edge_attr)
 
     assert edges.shape == (NB_EDGES, 1)
+    
