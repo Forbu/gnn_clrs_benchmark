@@ -113,10 +113,6 @@ class ProgressiveGNN(pl.LightningModule):
                 nodes_input = torch.cat([nodes, nodes_init], dim=-1)
                 # now we can forward the block GNN
 
-                print(nodes_input.shape)
-                print(edge_index.shape)
-                print(edge_attr.shape)
-
                 nodes = self.block_gnn(nodes_input, edge_index, edge_attr)
 
             # now we can forward the final layer
@@ -170,7 +166,7 @@ class ProgressiveGNN(pl.LightningModule):
 
         # we first compute the standard training
         edges_softmax = self(
-            nb_iter=n,
+            nb_iter=n_step,
             nodes=nodes,
             edge_index=edge_index,
             edge_attr=edge_attr,
@@ -184,7 +180,7 @@ class ProgressiveGNN(pl.LightningModule):
 
         # now we compute the progressive training
         edges_softmax_progressive = self(
-            nb_iter=n,
+            nb_iter=n_step,
             nodes=nodes,
             edge_index=edge_index,
             edge_attr=edge_attr,
@@ -205,6 +201,7 @@ class ProgressiveGNN(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         """
+        In the validation step we only use the progressive training paradigm
         TODO
         """
         pass
