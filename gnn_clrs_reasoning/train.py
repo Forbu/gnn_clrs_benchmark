@@ -1,12 +1,12 @@
 """
 Training module
 """
-from gnn_clrs_reasoning.models import ProgressiveGNN
-from gnn_clrs_reasoning.preprocessing import PreprocessGraphDataset
-
 from torch_geometric.data import DataLoader
 
 import pytorch_lightning as pl
+
+from gnn_clrs_reasoning.models import ProgressiveGNN
+from gnn_clrs_reasoning.preprocessing import PreprocessGraphDataset
 
 
 def train(graph_type="dfs", folder="/tmp/CLRS30"):
@@ -50,6 +50,7 @@ def train(graph_type="dfs", folder="/tmp/CLRS30"):
 
     # final operation to evaluate the model on the test set (OOD)
     # TODO: implement this
+    # evaluate_progressive_gnn(model, dataloader_eval)
 
 
 def create_dataloader(folder, algorithm, split):

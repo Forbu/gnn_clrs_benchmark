@@ -143,10 +143,10 @@ def test_progressive_gnn_train_step(progressive_gnn, graph_data):
     nodes, edge_index, edge_attr = graph_data
 
     batch = {
-        "nodes": nodes,
+        "x": nodes,
         "edge_index": edge_index,
         "edge_attr": edge_attr,
-        "edge_target": torch.randint(0, NB_NODES, (NB_NODES, 1)),
+        "edge_target": torch.randint(0, 2, (NB_EDGES, 1)),
     }
 
     # now we can use the training_step

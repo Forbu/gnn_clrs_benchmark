@@ -13,6 +13,8 @@ import torch_geometric
 # import IterableDataset from torch.utils.data
 from torch.utils.data import IterableDataset
 
+from gnn_clrs_reasoning.utils import compute_edge_probability
+
 GRAPH_NAMES = [
     "dfs",
     "bfs",
@@ -35,6 +37,10 @@ def generate_dataset_graph(
     """
     Preprocess the graphs and save them to disk.
     """
+    print(
+        f"Generating dataset for {algorithm} graph, split {split}, batch size {batch_size}"
+    )
+
     train_ds, num_samples, spec = clrs.create_dataset(
         folder=folder,
         algorithm=algorithm,
@@ -55,7 +61,7 @@ def preprocess_dfs(batch_train_ds):
 
     # first we have to retrieve the graph and the target
     # the graphs are located in the train_ds.inputs.
-    graph_sparse = torch.Tensor(batch_train_ds.features.inputs[0].data)
+    graph_sparse = torch.Tensor(batch_train_ds.features.inputs[1].data)
 
     # A is a tensor of shape (batch_size, num_nodes, num_nodes)
     # for every graph in the batch we have a matrix of shape (num_nodes, num_nodes)
@@ -91,10 +97,15 @@ def preprocess_dfs(batch_train_ds):
 
         target = torch.tensor(batch_train_ds.outputs[0].data[0])
 
+        subgraph = torch.stack([torch.arange(0, graph_sparse.shape[1]), target], dim=0)
+
+        # compute the edge probability
+        edge_proba = compute_edge_probability(edges, subgraph)
+
         graph = torch_geometric.data.Data(
             x=nodes_features,
             edge_index=edges,
-            y=target,
+            edge_target=edge_proba,
         )
 
         list_graph.append(graph)

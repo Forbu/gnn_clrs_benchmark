@@ -9,16 +9,14 @@ from torch import nn
 
 from torch_scatter import scatter_softmax
 
-from gnn_clrs_reasoning.utils import MLP, compute_edges_loss
+from gnn_clrs_reasoning.utils import MLP, compute_edges_loss, compute_edge_probability
 
 NB_NODES = 10
 NODES_DIM = 1
 
 
-def test_graph_data():
-    """
-    Initialize a graph to test the utils functions
-    """
+@pytest.fixture(scope="module", autouse=True, name="graph")
+def init_graph():
     # init nodes
     nodes = torch.randn(NB_NODES, 1)
 
@@ -41,6 +39,15 @@ def test_graph_data():
         [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 0, 1, 4, 5, 4, 7, 6, 7, 8]]
     )
 
+    return nodes, edge_index, edge_attr, subgraph_edge_index
+
+
+def test_graph_data(graph):
+    """
+    Initialize a graph to test the utils functions
+    """
+    nodes, edge_index, edge_attr, subgraph_edge_index = graph
+
     # now we can apply the loss
     loss_fn = nn.BCELoss()
 
@@ -49,3 +56,15 @@ def test_graph_data():
     )
 
     assert loss.size() == torch.Size([])
+
+
+def test_compute_edge_probability(graph):
+    """
+    Test the edge probability computation
+    """
+    nodes, edge_index, edge_attr, subgraph_edge_index = graph
+
+    # compute the edge probability
+    edge_probability = compute_edge_probability(edge_index, subgraph_edge_index)
+
+    assert edge_probability.size() == torch.Size([edge_index.shape[1]])

@@ -10,9 +10,11 @@ from torch import nn
 
 from torch_geometric.nn import GATv2Conv
 
-from torch_scatter.composite import scatter_softmax
+from torch_scatter.composite import scatter_softmax, scatter_log_softmax
 
 import pytorch_lightning as pl
+
+from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall
 
 from gnn_clrs_reasoning.utils import MLP, compute_edges_loss
 
@@ -75,7 +77,11 @@ class ProgressiveGNN(pl.LightningModule):
             nodes_dim=128, edges_dim=128, nb_layers=2, hidden_dim=128
         )
 
-        self.loss_fn = torch.nn.BCELoss()
+        self.loss_fn = torch.nn.BCEWithLogitsLoss()
+
+        self.accuracy_metric = BinaryAccuracy()
+        self.precision_metric = BinaryPrecision()
+        self.recall_metric = BinaryRecall()
 
     def forward(
         self,
@@ -148,11 +154,18 @@ class ProgressiveGNN(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """
         Training step
-        TODO
         """
+
+        # we check if edge_attr is in the batch
+        # if not we create it
+        if "edge_attr" not in batch:
+            batch["edge_attr"] = torch.ones(
+                (batch["edge_index"].shape[1], self.edges_dim)
+            ).to(batch["edge_index"].device)
+
         # get the data
         nodes, edge_index, edge_attr, edge_target = (
-            batch["nodes"],
+            batch["x"],
             batch["edge_index"],
             batch["edge_attr"],
             batch["edge_target"],
@@ -174,8 +187,8 @@ class ProgressiveGNN(pl.LightningModule):
         )
 
         # compute the loss
-        loss_standard = compute_edges_loss(
-            edges_softmax, edge_index, edge_target, self.loss_fn
+        loss_standard = self.loss_fn(
+            edges_softmax.squeeze(), edge_target.float().squeeze()
         )
 
         # now we compute the progressive training
@@ -184,16 +197,53 @@ class ProgressiveGNN(pl.LightningModule):
             nodes=nodes,
             edge_index=edge_index,
             edge_attr=edge_attr,
-            progressive=True,
-            progressive_iter=k,
+            progressive=False,
+            progressive_iter=0,
         )
 
-        loss_progressive = compute_edges_loss(
-            edges_softmax_progressive, edge_index, edge_target, self.loss_fn
+        loss_progressive = self.loss_fn(
+            edges_softmax_progressive.squeeze(), edge_target.float().squeeze()
         )
 
         self.log("loss_standard_train", loss_standard)
         self.log("loss_progressive_train", loss_progressive)
+
+        # we also want to log accuracy for the standard and progressive training
+        # we compute the accuracy
+        acc_standard = self.accuracy_metric(edges_softmax.squeeze(), edge_target)
+        acc_progressive = self.accuracy_metric(
+            edges_softmax_progressive.squeeze(), edge_target
+        )
+
+        # we log the accuracy
+        self.log("acc_standard_train", acc_standard)
+        self.log("acc_progressive_train", acc_progressive)
+
+        # we also want to log precision and recall for the standard and progressive training
+        # we compute the precision
+        precision_standard = self.precision_metric(edges_softmax.squeeze(), edge_target)
+        precision_progressive = self.precision_metric(
+            edges_softmax_progressive.squeeze(), edge_target
+        )
+
+        # we log the precision
+        self.log("precision_standard_train", precision_standard)
+        self.log("precision_progressive_train", precision_progressive)
+
+        # we compute the recall
+        recall_standard = self.recall_metric(edges_softmax.squeeze(), edge_target)
+        recall_progressive = self.recall_metric(
+            edges_softmax_progressive.squeeze(), edge_target
+        )
+
+        # we log the recall
+        self.log("recall_standard_train", recall_standard)
+        self.log("recall_progressive_train", recall_progressive)
+
+        # log the first edge softmax (sigmoid) value
+        print(nn.functional.sigmoid(edges_softmax[0:16, 0]))
+
+        print(edge_target[0:16])
 
         return (
             self.lambda_coef * loss_standard + (1 - self.lambda_coef) * loss_progressive
@@ -210,7 +260,7 @@ class ProgressiveGNN(pl.LightningModule):
         """
         Classic Adam optimizer
         """
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-2)
         return optimizer
 
 
@@ -321,6 +371,9 @@ class EdgesSoftmax(nn.Module):
         # use scatter_softmax to compute the softmax over the edges
         # we have to use the edge_index[0] to compute the softmax
         # because each nodes have N_edges
-        result = scatter_softmax(message[:, 0], edge_index[0, :])  # shape (nb_edges, 1)
+        # result = scatter_log_softmax(
+        #     message[:, 0], edge_index[0, :]
+        # )  # shape (nb_edges, 1)
+        result = message[:, 0].reshape(-1, 1)
 
-        return result.reshape(-1, 1)
+        return result

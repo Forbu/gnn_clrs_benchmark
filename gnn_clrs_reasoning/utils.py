@@ -58,6 +58,30 @@ class MLP(nn.Module):
         return self.model(vector)
 
 
+def compute_edge_probability(edges_index, subgraph_edges_index):
+    """
+    We have two sets of edges :
+    edges_index is the index of the edges in the graph size (2, nb_edges)
+    subgraph_edges_index is the index of the edges in the subgraph size (2, nb_nodes)
+    
+    we want to compute the probability of the edges in the graph
+    value 1 : the edge is in the subgraph
+    value 0 : the edge is not in the subgraph
+    
+    """
+    
+    
+    # get the index of the subgraph edges in the edges_index
+    index_edges_subgraph = find_index_edges_subgraph(edges_index, subgraph_edges_index)
+
+    # initialize the probability of the edges
+    edges_proba = torch.zeros(edges_index.shape[1]).to(edges_index.device)
+
+    # put the probability of the edges in the subgraph to 1
+    edges_proba[index_edges_subgraph] = 1
+
+    return edges_proba
+
 def compute_edges_loss(edges_proba, edges_index, subgraph_edges_index, loss_fn):
     """
     Compute the loss over the edges
@@ -89,7 +113,9 @@ def compute_edges_loss(edges_proba, edges_index, subgraph_edges_index, loss_fn):
     index_edges_subgraph = find_index_edges_subgraph(edges_index, subgraph_edges_index)
 
     # get the index of the edges not in the subgraph
-    init_index_edges_not_subgraph = torch.arange(edges_index.shape[1])
+    init_index_edges_not_subgraph = torch.arange(edges_index.shape[1]).to(
+        edges_proba.device
+    )
 
     isin_edge_subgraph = torch.isin(init_index_edges_not_subgraph, index_edges_subgraph)
     index_edges_not_subgraph = init_index_edges_not_subgraph[~isin_edge_subgraph]
