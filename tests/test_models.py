@@ -7,10 +7,10 @@ import pytest
 import torch
 from torch import nn
 
-from gnn_clrs_reasoning.models import ProgressiveGNN, BlockGNN, EdgesSoftmax
+from gnn_clrs_reasoning.models import ProgressiveGNN, BlockGNN
 
 NODES_DIM = 130
-EDGES_DIM = 3
+EDGES_DIM = 128
 NB_NODES = 200
 NB_EDGES = 500
 
@@ -46,14 +46,11 @@ def create_model():
     """
 
     block_gnn = BlockGNN(
-        nodes_dim=NODES_DIM, edges_dim=EDGES_DIM, hidden_dim=128, nb_head=4
+        edges_dim=EDGES_DIM, hidden_dim=NODES_DIM, output_dim=128
     )
 
-    edge_softmax = EdgesSoftmax(
-        nodes_dim=NODES_DIM, edges_dim=EDGES_DIM, nb_layers=2, hidden_dim=128
-    )
 
-    return block_gnn, edge_softmax
+    return block_gnn
 
 
 @pytest.fixture(scope="module", autouse=True, name="progressive_gnn")
@@ -66,7 +63,6 @@ def create_progressive_gnn():
         node_dim=NODES_DIM,
         edges_dim=EDGES_DIM,
         hidden_dim=128,
-        nb_head=4,
         m_iter=5,
         n_iter=5,
         lambda_coef=0.5,
@@ -80,27 +76,15 @@ def test_block_gnn(model, graph_data):
     Test the block GNN
     """
 
-    block_gnn, _ = model
+    block_gnn = model
     nodes, edge_index, edge_attr = graph_data
 
     # now we can forward the model
-    nodes = block_gnn(nodes, edge_index, edge_attr)
+    nodes, edge_attr = block_gnn(nodes, edge_index, edge_attr)
 
     assert nodes.shape == (NB_NODES, 128)
+    assert edge_attr.shape == (NB_EDGES, 128)
 
-
-def test_edges_softmax(model, graph_data):
-    """
-    Test the edges softmax
-    """
-
-    _, edge_softmax = model
-    nodes, edge_index, edge_attr = graph_data
-
-    # now we can forward the model
-    edges = edge_softmax(nodes, edge_index, edge_attr)
-
-    assert edges.shape == (NB_EDGES, 1)
 
 
 def test_progressive_gnn(progressive_gnn, graph_data):

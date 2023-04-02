@@ -40,7 +40,7 @@ class MPGNNConv(MessagePassing):
         # now we apply the MLPs with residual connections
         node = self.lin_node(node) + init_node
 
-        return node, edge_attr
+        return node
 
     def message(self, x_j: Tensor, x_i: Tensor, edge_attr: Tensor):
         """
@@ -52,6 +52,9 @@ class MPGNNConv(MessagePassing):
             edge_attr (Tensor): Tensor of shape (E, edge_dim) where E is the number of edges. FloatTensor
         """
         edge_info = torch.cat((x_i, x_j, edge_attr), dim=-1)
+        
+        #breakpoint()
+
         edge_info = self.lin_edge(edge_info)
 
         self.edge_info = edge_info

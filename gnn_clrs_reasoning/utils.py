@@ -33,9 +33,9 @@ class MLP(nn.Module):
 
         super().__init__()
 
-        layers = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
+        layers = [nn.Linear(in_dim, hidden_dim), nn.LeakyReLU()]
         for _ in range(hidden_layers - 1):
-            layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
+            layers += [nn.Linear(hidden_dim, hidden_dim), nn.LeakyReLU()]
         layers.append(nn.Linear(hidden_dim, out_dim))
 
         if norm_type is not None:
@@ -69,8 +69,6 @@ def compute_edge_probability(edges_index, subgraph_edges_index):
     value 0 : the edge is not in the subgraph
     
     """
-    
-    
     # get the index of the subgraph edges in the edges_index
     index_edges_subgraph = find_index_edges_subgraph(edges_index, subgraph_edges_index)
 

@@ -97,7 +97,7 @@ def preprocess_dfs(batch_train_ds):
 
         target = torch.tensor(batch_train_ds.outputs[0].data[0])
 
-        subgraph = torch.stack([torch.arange(0, graph_sparse.shape[1]), target], dim=0)
+        subgraph = torch.stack([target, torch.arange(0, graph_sparse.shape[1])], dim=0)
 
         # compute the edge probability
         edge_proba = compute_edge_probability(edges, subgraph)
