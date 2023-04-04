@@ -233,12 +233,14 @@ class ProgressiveGNN(L.LightningModule):
         self.log("acc_progressive_train", acc_progressive)
 
         # log the first edge softmax (sigmoid) value
-        print(edge_values_new[0:16])
-        print(edge_target[0:16])
+        # print(edge_values_new[0:16])
+        # print(edge_target[0:16])
 
         # we replace the losses by nan_to_num to avoid nan values
         loss_standard = torch.nan_to_num(loss_standard, nan=0.0, posinf=0.0, neginf=0.0)
-        loss_progressive = torch.nan_to_num(loss_progressive, nan=0.0, posinf=0.0, neginf=0.0)
+        loss_progressive = torch.nan_to_num(
+            loss_progressive, nan=0.0, posinf=0.0, neginf=0.0
+        )
 
         return (
             self.lambda_coef * loss_standard + (1 - self.lambda_coef) * loss_progressive
@@ -249,7 +251,63 @@ class ProgressiveGNN(L.LightningModule):
         In the validation step we only use the progressive training paradigm
         TODO
         """
-        pass
+        # we check if edge_attr is in the batch
+        # if not we create it
+        if "edge_attr" not in batch:
+            batch["edge_attr"] = torch.ones(
+                (batch["edge_index"].shape[1], self.edges_dim)
+            ).to(batch["edge_index"].device)
+
+        # get the data
+        nodes, edge_index, edge_attr, edge_target = (
+            batch["x"],
+            batch["edge_index"],
+            batch["edge_attr"],
+            batch["edge_target"],
+        )
+
+        # we mix the progressive and classic training
+        # we select a random number of iteration for the progressive training
+        # and a random number of iteration for the classic training
+        n_step = self.m_iter + self.n_iter
+
+        with torch.no_grad():
+            edge_values = self(
+                nb_iter=n_step,
+                nodes=nodes,
+                edge_index=edge_index,
+                edge_attr=edge_attr,
+                progressive=False,
+                progressive_iter=0,
+            )
+
+        # compute the loss
+        # loss_standard = self.loss_fn(
+        #     edge_values.squeeze(), edge_target.float().squeeze()
+        # )
+        loss_standard, edge_values_new = compute_custom_loss(
+            edge_values.squeeze(), edge_target.float().squeeze(), edge_index
+        )
+
+        self.log("loss_standard_validation", loss_standard)
+
+        # we also want to log accuracy for the standard and progressive training
+        # we compute the accuracy
+        acc_standard = self.accuracy_metric(
+            edge_values_new.squeeze(), edge_target.squeeze()
+        )
+
+        # we log the accuracy
+        self.log("acc_standard_validation", acc_standard)
+
+        # log the first edge softmax (sigmoid) value
+        # print(edge_values_new[0:16])
+        # print(edge_target[0:16])
+
+        # we replace the losses by nan_to_num to avoid nan values
+        loss_standard = torch.nan_to_num(loss_standard, nan=0.0, posinf=0.0, neginf=0.0)
+
+        return loss_standard
 
     def configure_optimizers(self):
         """
