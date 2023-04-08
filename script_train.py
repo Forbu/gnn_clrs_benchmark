@@ -34,10 +34,10 @@ if __name__ == "__main__":
 
     # init the model
     model = ProgressiveGNN(
-        node_dim=2,
+        node_dim=1,
         edges_dim=2,
         hidden_dim=32,
-        m_iter=10,
+        m_iter=8,
         n_iter=8,
         lambda_coef=0.5,
     )
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # init the trainer (pytorch lightning)
     trainer = L.Trainer(
         # time 1 hour
-        max_time={"minutes": 120},
+        max_time={"minutes": 500},
         # gradient clipping
         logger=L.pytorch.loggers.tensorboard.TensorBoardLogger(
             "lightning_logs", name="progressive_gnn"
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     trainer.fit(model, dataloader_train, dataloader_eval)
 
     # save the model
-    trainer.save_checkpoint("progressive_gnn.pt")
+    trainer.save_checkpoint("progressive_gnn_next.pt")
 
     # save model weights
-    torch.save(model.state_dict(), "progressive_gnn_weights.pt")
+    torch.save(model.state_dict(), "progressive_gnn_weights_next.pt")

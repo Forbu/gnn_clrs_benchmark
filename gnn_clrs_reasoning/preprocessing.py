@@ -95,6 +95,11 @@ def preprocess_dfs(batch_train_ds):
             batch_train_ds.features.inputs[2].data[i, :]
         )
 
+        # we randomly divise nodes_features[:, 1] by a float between 1 and 10 and we add a random number between 0 and 1
+        nodes_features[:, 1] = nodes_features[:, 1] / (
+            torch.rand(1) * 10 + 1
+        ) + torch.rand(1)
+
         target = torch.tensor(batch_train_ds.outputs[0].data[0])
 
         subgraph = torch.stack([target, torch.arange(0, graph_sparse.shape[1])], dim=0)

@@ -159,3 +159,5 @@ def find_index_edges_subgraph(edges_index, subgraph_edges_index):
     index_edges_subgraph = torch.nonzero(matched_edges.any(dim=1)).flatten()
 
     return index_edges_subgraph
+
+
